@@ -32,42 +32,63 @@ const int32_t SOCKET_TIMEOUT_SEC = 5;                      // TODO: apply as SO_
 
 // Stack: back the live Call Stack during execution
 template <typename T>
-class Stack
-{
-    struct Node
-    {
+class Stack{
+
+    struct Node{
         T data;
         Node* next;
+
     };
+
     Node* top;
     int32_t count;
 
 public:
-    // Implement these functions:
-    Stack()
-    { // initialize the stack
-    }
-    void push(const T& val)
-    {
 
-        // pushes the value on the stack if max limit is not reached yet.
+    Stack(){
+        top = nullptr;
+        count = 0;
     }
-    T pop()
-    {
-        // pop the top value on the stack
+
+    void push(const T& val){
+        Node* n = new Node;
+        n->data = val;
+        n->next = top;
+        top = n;
+        count++;
+      
     }
-    T& peek()
-    {
-        // returns the top value on the stack
+
+    T pop(){
+
+        Node* temp = top;
+        T val = temp = ->data;
+        top = top->next;
+        delete temp;
+        count--;
+
+        return value;
+    
     }
-    bool isEmpty()
-    {
+
+    T& peek(){
+
+        return top->data;
     }
-    int32_t depth()
-    {
+
+    bool isEmpty(){
+        
+        return count == 0;
+
     }
-    int32_t snapshot_into(T out[], int32_t maxLen)
-    {
+
+    int32_t depth(){
+      
+        return depth;
+    }
+
+    int32_t snapshot_into(T out[], int32_t maxLen){
+
         // copies every frame, top to bottom in the array given as a parameter
         // this is what buildSnapshot() call, returns count written
     }
@@ -76,31 +97,56 @@ public:
 
 // Timeline : doubly linked list of Snapshots
 struct Snapshot; // fwd declaration;
-struct TimelineNode
-{
+struct TimelineNode{
+
     Snapshot* data;
     TimelineNode* next;
     TimelineNode* prev;
 };
-class Timeline
-{
+
+
+class Timeline{
     TimelineNode* head, * tail;
     int32_t stepCount;
 
 public:
-    // Implement these functions
-    Timeline()
-    {
+  
+    Timeline(){
+        stepCount = 0;
+        head = nullptr;
+        tail = nullptr;
     }
-    void record(Snapshot* s)
-    {
-        // add record in the timeline
+
+    void record(Snapshot* s){
+
+        TimelineNode* n= new TimelineNode;
+
+        n->data = s;
+        n->next = nullptr;
+        n->prev = tail;
+
+        if (tail == nullptr){
+            head = n;
+            tail = n;
+        }
+
+        else{
+            tail->next = n;
+            tail = n;
+        }
+
+        stepCount++;
     }
-    TimelineNode* begin()
-    {
+
+    TimelineNode* begin(){
+
+        return head;
     }
-    int32_t getStepCount()
-    {
+
+    int32_t getStepCount(){
+
+        return stepCount;
+
     }
 };
 
@@ -154,12 +200,19 @@ struct PendingPatch
 
 
 // PASS 0x0: READING source.bin + VALIDITY CHECK
-bool readSourceLine(ifstream& in, string& out)
-{
-    // reads the next nonblank line
+bool readSourceLine(ifstream& in, string& out){
+   
+    while (getline(in, out)) {
+
+        if (!out.empty()) {
+            return true;
+        }
+    }
+    return false;
+
 }
-string firstWord(const string& line)
-{
+
+string firstWord(const string& line){
     // returns first word from the input string
 }
 string secondWord(const string& line)
