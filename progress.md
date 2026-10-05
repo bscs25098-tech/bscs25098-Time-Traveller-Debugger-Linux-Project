@@ -13,3 +13,9 @@ Time Traveller Debugger Project
 
 
 -Till yet, i've implemented stack functions and timeline structure. Also i implemented function for reading from source. Tomorrow im planning to complete validation and entire stage 1 and some of resolve (T_T)
+
+
+5-10-26
+
+
+-So today i implemented functions for first word, second word and validation(stage 1). I understood resolve too but i will implement it tomorrow now because today had uni. 

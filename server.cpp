@@ -213,15 +213,77 @@ bool readSourceLine(ifstream& in, string& out){
 }
 
 string firstWord(const string& line){
-    // returns first word from the input string
+    int i = 0;
+    string word = "";
+
+    while (i < line.length() && line[i] != ' ') {
+        word += line[i];
+        i++;
+
+    }
+    return word;
 }
-string secondWord(const string& line)
-{
-    // returns the second word
+
+string secondWord(const string& line){
+    int i = 0;
+    string word = "";
+    int spaces = 0;
+
+    while (i < line.length()){
+        if (line[i] == ' ') {
+
+            spaces++;
+        }
+
+        else if (spaces == 1) {
+
+            word += line[i];
+        }
+        else if (spaces > 1){
+            break;
+        }
+
+        i++;
+    }
+
+    return word;
 }
-bool validateProgram(const char* sourcePath)
-{
-    // for each func defined there should be exactly one func_end and no nested funcs allowed - 
+
+bool validateProgram(const char* sourcePath){
+    ifstream in(sourcePath);
+    if (!in){
+        return false;
+    }
+
+    string line;
+    bool inside_func = false;
+
+    while (readSourceLine(in, line)){
+        string word = firstWord(line);
+
+        if (word == "func"){
+            if (inside_func){
+
+                return false;
+            }
+
+            inside_func = true;
+        }
+
+        else if (word == "func_end"){
+            if (!inside_func){
+            
+                return false;
+            }
+
+            inside_func = false;
+        }
+    }
+
+    if (inside_func){
+        return false;
+    }
+    return true;
 }
 
 // PASS 0x1: RESOLVE() -> resolve.bin
