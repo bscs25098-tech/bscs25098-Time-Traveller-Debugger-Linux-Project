@@ -19,3 +19,7 @@ Time Traveller Debugger Project
 
 
 -So today i implemented functions for first word, second word and validation(stage 1). I understood resolve too but i will implement it tomorrow now because today had uni. 
+
+
+6-10-26
+Today i implemented the code for resolve (Stage 2). Understood the full format and working of offset. Also I understood how functions work in binary file handling
