@@ -22,4 +22,11 @@ Time Traveller Debugger Project
 
 
 6-10-26
-Today i implemented the code for resolve (Stage 2). Understood the full format and working of offset. Also I understood how functions work in binary file handling
+
+
+-Today i implemented the code for resolve (Stage 2). Understood the full format and working of offset. Also I understood how functions work in binary file handling
+
+
+8-10-26
+
+-Today I complemeted my code for resolve program fully. Then I understood the entire execution stage and implemented function for tokenize line. Tomorrow i'll try getting done with the execution part fully.

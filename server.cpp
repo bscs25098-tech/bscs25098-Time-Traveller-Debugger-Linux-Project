@@ -177,8 +177,8 @@ struct TTDBHeader
     int32_t stepCount;
     int64_t indexOffset;
 };
-void writeHeader(FILE* f, const TTDBHeader& h)
-{
+
+void writeHeader(FILE* f, const TTDBHeader& h){
     fwrite(h.magic, 1, 4, f);
     fwrite(&h.version, sizeof(int32_t), 1, f);
 
@@ -186,13 +186,13 @@ void writeHeader(FILE* f, const TTDBHeader& h)
 }
 
 // resolve.bin - bookkeeping
-struct FuncEntry
-{
+struct FuncEntry{
+
     string funcName;
     int64_t byteOffsetInResolveBin; // where this function's FUNC header record sits
 };
-struct PendingPatch
-{
+
+struct PendingPatch{
     int64_t byteOffsetOfOffsetField; // where in resolve.bin to seek back and overwrite
     string targetFuncName;
 };
@@ -317,47 +317,141 @@ int64_t readResolveRecord(FILE* f, string& outText){
 }
 
 
-int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
-{
+int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath){
     FuncEntry funcArray[MAX_FUNCS];
     int32_t funcCount = 0;
     PendingPatch patches[MAX_PATCHES];
     int32_t patchCount = 0;
-    // Every source line becomes one record holding the raw line, as-is.
-    // resolve() only PEEKS at the leading word(s) -- enough to spot FUNC
-    // (remember its position) and CALL (remember which function it needs
-    // and where its offset field sits).
-    // Once the whole file is written, every CALL's offset field is patched
-    // with its target's position. Patching happens after the full write
-    // Returns the byte offset of main's FUNC header record.
-    // if there is no main return the error 
+
+    ifstream source(sourcePath);
+    FILE* resolveFile = fopen(resolveBinPath, "wb+");
+   
+    if (!source || resolveFile == nullptr) {
+        return -1;
+    }
+
+    string line;
+    int64_t current_offset = 0;
+    while (readSourceLine(source, line)) {
+        string w1 = firstWord(line);
+        string w2 = secondWord(line);
+
+
+        writeResolveRecord(resolveFile, current_offset, line);
+
+
+        if (w1 == "func") {
+            funcArray[funcCount].funcName = w2;
+            funcArray[funcCount].byteOffsetInResolveBin = current_offset;
+            funcCount++;
+        }
+
+        if (w1 == "call") {
+            patches[patchCount].byteOffsetOfOffsetField = current_offset;
+            patches[patchCount].targetFuncName = w2;
+            patchCount++;
+        }
+
+        current_offset = current_offset + 8 + 4 + line.length();
+
+        int64_t main_offset = -1;
+        for (int i = 0; i < funcCount; i++) {
+            if (funcArray[i].funcName == "main") {
+                main_offset = funcArray[i].byteOffsetInResolveBin;
+                break;
+            }
+        }
+
+        if (main_offset == -1) {
+            fclose(resolveFile);
+            return -1;
+        }
+
+        for (int i = 0; i < patchCount; i++) {
+            int64_t target_offset = -1;
+            for (int j = 0; j < funcCount; j++) {
+
+                if (funcArray[j].funcName == patches[i].targetFuncName) {
+                    target_offset = funcArray[j].byteOffsetInResolveBin;
+                    break;
+                }
+            }
+
+            if (target_offset == -1) {
+                fclose(resolveFile);
+                return -1;
+            }
+
+            fseek(resolveFile, patches[i].byteOffsetOfOffsetField, SEEK_SET);
+            fwrite(&target_offset, sizeof(int64_t), 1, resolveFile);
+        }
+
+        fclose(resolveFile);
+        return main_offset;
+
+    }
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
-enum TokenType
-{
+enum TokenType{
     KEYWORD,
     IDENTIFIER,
     PARAM
+
 };
-struct Token
-{
+
+struct Token{
+
     TokenType type;
     string text;
 };
-int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
-{
-    // first word is always a instruction keyword
-    // instruction set = [func, func_end, call, set, add, sub, mul and div]
-    // next word is identifier like name of a function, variable name
-    // after identifier all are the params/arg, space separated
+
+int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens){
+    int ct = 0;
+    int i = 0;
+
+    while (i < line.length() && ct < maxTokens){
+       
+        while (i < line.length() && line[i] == ' '){     
+            i++;
+        }
+
+        if (i >= line.length()){
+            break;
+        }
+
+        string word = "";
+        while (i < line.length() && line[i] != ' '){
+            word += line[i];
+            i++;
+        }
+
+        if (ct == 0){
+            tokens[ct].type = KEYWORD;
+        }
+
+        else if (ct == 1){
+            tokens[ct].type = IDENTIFIER;
+        }
+
+        else{
+        
+            tokens[ct].type = PARAM;
+        }
+        tokens[ct].text = word;
+        ct++;
+    }
+
+    return ct;
 }
-Snapshot* buildSnapshot(Stack<Frame>& callStack)
-{
+
+Snapshot* buildSnapshot(Stack<Frame>& callStack){
+
     // build the snapshot based on the callStack given
 }
-void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline)
-{
+
+void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline){
+
     // initialize the call stack
     // make the main frame
     // push main frame on the call stack
@@ -367,8 +461,8 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
 }
 
 // PASS 0x3: SERIALIZE TIMELINE
-void writeTdbg(Timeline& timeline, const char* tdbgPath)
-{
+void writeTdbg(Timeline& timeline, const char* tdbgPath){
+
     // placeholder for header
     // index array of the size of stepcount from the timeline
     // placing each snapshot in the file while maintaining the index(starting point of each nth snapshot)
