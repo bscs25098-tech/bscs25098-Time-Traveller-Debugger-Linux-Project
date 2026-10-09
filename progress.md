@@ -30,3 +30,7 @@ Time Traveller Debugger Project
 8-10-26
 
 -Today I complemeted my code for resolve program fully. Then I understood the entire execution stage and implemented function for tokenize line. Tomorrow i'll try getting done with the execution part fully.
+
+
+9-10-26
+-Today I did major work for execution. I also went through my entire code and corrected typo errors. Rest of the execution phase  I will implement tomorrow and understand/start my serialization phase. 

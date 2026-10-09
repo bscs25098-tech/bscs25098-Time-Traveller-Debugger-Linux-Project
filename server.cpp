@@ -62,7 +62,7 @@ public:
     T pop(){
 
         Node* temp = top;
-        T val = temp = ->data;
+        T value = temp ->data;
         top = top->next;
         delete temp;
         count--;
@@ -84,13 +84,22 @@ public:
 
     int32_t depth(){
       
-        return depth;
+        return count;
     }
 
     int32_t snapshot_into(T out[], int32_t maxLen){
 
-        // copies every frame, top to bottom in the array given as a parameter
-        // this is what buildSnapshot() call, returns count written
+        Node* temp = top;
+        int ct = 0;
+
+        while (temp != nullptr && ct < maxLen) {
+            out[ct] = temp->data;
+            ct++;
+            temp = temp->next;
+
+
+        }
+        return ct;
     }
 };
 
@@ -161,7 +170,7 @@ struct Frame
     string func_name;
     int32_t argc;
     Variable argv[MAX_VARS_PER_FRAME];
-    int32_t returnLine;
+    int64_t returnLine;
     Variable locals[MAX_VARS_PER_FRAME];
     int32_t localCount;
 };
@@ -299,21 +308,30 @@ int64_t writeResolveRecord(FILE* f, int64_t offsetField, const string& text){
 }
 
 int64_t readResolveRecord(FILE* f, string& outText){
-   
     int32_t size;
     int64_t offset;
-    fread(&offset, sizeof(int64_t), 1, f);
-    fread(&size, sizeof(int32_t), 1, f);
+
+    if (fread(&offset, sizeof(int64_t), 1, f) != 1){
+        return -1;
+    }
+
+    if (fread(&size, sizeof(int32_t), 1, f) != 1){
+    
+        return -1;
+    }
     outText = "";
 
     for (int i = 0; i < size; i++){
         char ch;
-        fread(&ch, sizeof(char), 1, f);
+
+        if (fread(&ch, sizeof(char), 1, f) != 1){
+            return -1;
+        }
+
         outText += ch;
     }
 
     return offset;
-  
 }
 
 
@@ -327,6 +345,9 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath){
     FILE* resolveFile = fopen(resolveBinPath, "wb+");
    
     if (!source || resolveFile == nullptr) {
+        if (resolveFile != nullptr) {
+            fclose(resolveFile);
+        }
         return -1;
     }
 
@@ -353,6 +374,7 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath){
         }
 
         current_offset = current_offset + 8 + 4 + line.length();
+    }
 
         int64_t main_offset = -1;
         for (int i = 0; i < funcCount; i++) {
@@ -389,7 +411,7 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath){
         fclose(resolveFile);
         return main_offset;
 
-    }
+    
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
@@ -447,17 +469,147 @@ int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens){
 
 Snapshot* buildSnapshot(Stack<Frame>& callStack){
 
-    // build the snapshot based on the callStack given
+    Snapshot* s = new Snapshot;
+    s->stackDepth = callStack.snapshot_into(s->callStack, MAX_STACK_DEPTH);
+
+    return s;
+
 }
 
-void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline){
+void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline) {
 
-    // initialize the call stack
-    // make the main frame
-    // push main frame on the call stack
+    FILE* file = fopen(resolveBinPath, "rb");
 
-    // implementation:
-    // execute line by line, and according to the keyword perform action
+    if (file == nullptr) {
+        return;
+    }
+
+    Stack<Frame> callStack;
+    Frame mainFrame;
+    mainFrame.func_name = "main";
+    mainFrame.argc = 0;
+    mainFrame.returnLine = -1;
+    mainFrame.localCount = 0;
+    callStack.push(mainFrame);
+    fseek(file, mainOffset, SEEK_SET);
+
+    string line;
+    bool endProgram = false;
+
+    while (true) {
+        int64_t offset = readResolveRecord(file, line);
+
+
+        if (offset == -1) {
+            break;
+        }
+
+        int64_t nextPosition = ftell(file);
+        Token tokens[MAX_TOKENS];
+        int32_t token_ct = tokenizeLine(line, tokens, MAX_TOKENS);
+
+        if (token_ct == 0) {
+            continue;
+        }
+
+        if ((tokens[0].text == "set" ||tokens[0].text == "add" ||tokens[0].text == "sub" ||tokens[0].text == "mul" ||tokens[0].text == "div") && token_ct < 3 || tokens[0].text == "call" && token_ct < 2){
+            break;
+        }
+
+        Frame& current_frame = callStack.peek();
+        if (tokens[0].text == "set"){
+          
+            if (current_frame.localCount >= MAX_VARS_PER_FRAME){
+                break;
+            }
+
+            int value = stoi(tokens[2].text);
+            current_frame.locals[current_frame.localCount].name = tokens[1].text;
+            current_frame.locals[current_frame.localCount].value = value;
+            current_frame.localCount++;
+        }
+
+        else if (tokens[0].text == "add"){
+            for (int i = 0; i < current_frame.localCount; i++){
+            
+                if (current_frame.locals[i].name == tokens[1].text){
+                    current_frame.locals[i].value = current_frame.locals[i].value + stoi(tokens[2].text);
+                    break;
+                }
+            }
+        }
+
+        else if (tokens[0].text == "sub"){
+            for (int i = 0; i < current_frame.localCount; i++){
+            
+                if (current_frame.locals[i].name == tokens[1].text){
+                    current_frame.locals[i].value =current_frame.locals[i].value - stoi(tokens[2].text);
+                    break;
+                }
+            }
+        }
+
+        else if (tokens[0].text == "mul"){
+            for (int i = 0; i < current_frame.localCount; i++){
+            
+                if (current_frame.locals[i].name == tokens[1].text){
+                    current_frame.locals[i].value = current_frame.locals[i].value * stoi(tokens[2].text);      
+                    break;
+                }
+            }
+        }
+
+        else if (tokens[0].text == "div"){
+            for (int i = 0; i < current_frame.localCount; i++){
+                
+                if (current_frame.locals[i].name == tokens[1].text){
+                    current_frame.locals[i].value = current_frame.locals[i].value / stoi(tokens[2].text);
+                    break;
+                }
+            }
+        }
+
+        else if (tokens[0].text == "call"){
+       
+            if (callStack.depth() >= MAX_STACK_DEPTH){
+                break;
+            }
+
+            Frame new_frame;
+            new_frame.func_name = tokens[1].text;
+            new_frame.argc = 0;
+            new_frame.returnLine = nextPosition;
+            new_frame.localCount = 0;
+            callStack.push(new_frame);
+
+            fseek(file, offset, SEEK_SET);
+        }
+
+
+        else if (tokens[0].text == "func_end"){
+            if (callStack.depth() == 1){
+                endProgram = true;
+            }
+
+            else{
+            
+                int64_t returnPosition = callStack.peek().returnLine;
+                callStack.pop();
+                fseek(file, returnPosition, SEEK_SET);
+            }
+        }
+
+
+        Snapshot* snapshot = buildSnapshot(callStack);
+        timeline.record(snapshot);
+        
+        if (endProgram){
+            break;
+        }
+
+    }
+    fclose(file);
+
 }
 
 // PASS 0x3: SERIALIZE TIMELINE
