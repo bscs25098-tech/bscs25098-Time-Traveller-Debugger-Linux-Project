@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Affan\source\repos\TimeTravellerDebugger(BSCS25098)\build\CMakeFiles\5dc6aa2df1866264aedb37feb0937fe3\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{8A777311-E7BB-3B36-AC8C-FB8139318963}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -174,6 +174,11 @@ struct Frame
     Variable locals[MAX_VARS_PER_FRAME];
     int32_t localCount;
 };
+struct argsUpdate
+{
+    int32_t argC;
+    string callerVar[MAX_VARS_PER_FRAME];
+};
 struct Snapshot
 {
     Frame callStack[MAX_STACK_DEPTH];
@@ -356,8 +361,6 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath){
     while (readSourceLine(source, line)) {
         string w1 = firstWord(line);
         string w2 = secondWord(line);
-
-
         writeResolveRecord(resolveFile, current_offset, line);
 
 
@@ -476,6 +479,16 @@ Snapshot* buildSnapshot(Stack<Frame>& callStack){
 
 }
 
+int findVariable(Frame& frame, string name){
+    for (int i = 0; i < frame.localCount; i++){
+        if (frame.locals[i].name == name){
+
+            return i;
+        }
+    }
+    return -1;
+}
+
 void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline) {
 
     FILE* file = fopen(resolveBinPath, "rb");
@@ -485,7 +498,8 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
     }
 
     Stack<Frame> callStack;
-    Frame mainFrame;
+    Stack<argsUpdate> callinfo;
+    Frame mainFrame{};
     mainFrame.func_name = "main";
     mainFrame.argc = 0;
     mainFrame.returnLine = -1;
@@ -512,98 +526,200 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
             continue;
         }
 
-        if ((tokens[0].text == "set" ||tokens[0].text == "add" ||tokens[0].text == "sub" ||tokens[0].text == "mul" ||tokens[0].text == "div") && token_ct < 3 || tokens[0].text == "call" && token_ct < 2){
+        if (((tokens[0].text == "set" ||
+            tokens[0].text == "add" ||
+            tokens[0].text == "sub" ||
+            tokens[0].text == "mul" ||
+            tokens[0].text == "div") && token_ct < 3) ||
+            (tokens[0].text == "call" && token_ct < 2)) {
             break;
         }
 
         Frame& current_frame = callStack.peek();
         if (tokens[0].text == "set"){
-          
-            if (current_frame.localCount >= MAX_VARS_PER_FRAME){
-                break;
-            }
-
+      
             int value = stoi(tokens[2].text);
-            current_frame.locals[current_frame.localCount].name = tokens[1].text;
-            current_frame.locals[current_frame.localCount].value = value;
-            current_frame.localCount++;
-        }
+            int index = findVariable(current_frame, tokens[1].text);
 
-        else if (tokens[0].text == "add"){
-            for (int i = 0; i < current_frame.localCount; i++){
+
+            if (index != -1){
             
-                if (current_frame.locals[i].name == tokens[1].text){
-                    current_frame.locals[i].value = current_frame.locals[i].value + stoi(tokens[2].text);
-                    break;
-                }
-            }
-        }
-
-        else if (tokens[0].text == "sub"){
-            for (int i = 0; i < current_frame.localCount; i++){
-            
-                if (current_frame.locals[i].name == tokens[1].text){
-                    current_frame.locals[i].value =current_frame.locals[i].value - stoi(tokens[2].text);
-                    break;
-                }
-            }
-        }
-
-        else if (tokens[0].text == "mul"){
-            for (int i = 0; i < current_frame.localCount; i++){
-            
-                if (current_frame.locals[i].name == tokens[1].text){
-                    current_frame.locals[i].value = current_frame.locals[i].value * stoi(tokens[2].text);      
-                    break;
-                }
-            }
-        }
-
-        else if (tokens[0].text == "div"){
-            for (int i = 0; i < current_frame.localCount; i++){
-                
-                if (current_frame.locals[i].name == tokens[1].text){
-                    current_frame.locals[i].value = current_frame.locals[i].value / stoi(tokens[2].text);
-                    break;
-                }
-            }
-        }
-
-        else if (tokens[0].text == "call"){
-       
-            if (callStack.depth() >= MAX_STACK_DEPTH){
-                break;
-            }
-
-            Frame new_frame;
-            new_frame.func_name = tokens[1].text;
-            new_frame.argc = 0;
-            new_frame.returnLine = nextPosition;
-            new_frame.localCount = 0;
-            callStack.push(new_frame);
-
-            fseek(file, offset, SEEK_SET);
-        }
-
-
-        else if (tokens[0].text == "func_end"){
-            if (callStack.depth() == 1){
-                endProgram = true;
+                current_frame.locals[index].value = value;
             }
 
             else{
             
-                int64_t returnPosition = callStack.peek().returnLine;
-                callStack.pop();
+                if (current_frame.localCount >= MAX_VARS_PER_FRAME){               
+                    break;
+                }
+
+                int i = current_frame.localCount;
+                current_frame.locals[i].name = tokens[1].text;
+                current_frame.locals[i].value = value;
+                current_frame.localCount++;
+            }
+        }
+
+        else if (tokens[0].text == "add"){
+        
+            int index = findVariable(current_frame, tokens[1].text);
+           
+            if (index == -1){         
+                cout << "Error, Variable not found" << endl;
+                break;
+            }
+
+            int value = stoi(tokens[2].text);
+
+            current_frame.locals[index].value = current_frame.locals[index].value + value;
+        }
+
+        else if (tokens[0].text == "sub"){
+        
+            int index = findVariable(current_frame, tokens[1].text);
+            if (index == -1){            
+                cout << "Error, Variable not found" << endl;
+                break;
+            }
+
+            int value = stoi(tokens[2].text);
+
+            current_frame.locals[index].value =current_frame.locals[index].value - value;
+        }
+
+        else if (tokens[0].text == "mul"){
+        
+            int index = findVariable(current_frame, tokens[1].text);
+            if (index == -1){
+                cout << "Error, Variable not found" << endl;
+                break;
+            }
+
+            int value = stoi(tokens[2].text);
+            current_frame.locals[index].value =current_frame.locals[index].value * value;
+
+        }
+
+        else if (tokens[0].text == "div"){
+        
+            int index = findVariable(current_frame, tokens[1].text);
+            if (index == -1){
+            
+                cout << "Error, Variable not found" << endl;
+                break;
+            }
+
+            int value = stoi(tokens[2].text);
+            if (value == 0){
+            
+                cout << "Error, division by 0" << endl;
+                break;
+            }
+
+            current_frame.locals[index].value =current_frame.locals[index].value / value;
+        }
+
+        else if (tokens[0].text == "call"){
+        
+            if (callStack.depth() >= MAX_STACK_DEPTH) {    
+                cout << "Error, Maximum call stack depth exceeded" << endl;
+                break;
+            }
+
+            Frame new_frame{};
+            new_frame.func_name = tokens[1].text;
+            new_frame.argc = token_ct - 2;
+            new_frame.returnLine = nextPosition;
+            new_frame.localCount = 0;
+            argsUpdate newInfo{};
+            newInfo.argC = new_frame.argc;
+
+            if (new_frame.argc > MAX_VARS_PER_FRAME){
+                cout << "Error,Too many function arguments" << endl;
+                break;
+            }
+
+            for (int i = 0; i < new_frame.argc; i++){
+            
+                string arg = tokens[i + 2].text;
+                int index = findVariable(current_frame, arg);
+                if (index != -1) {
+                    newInfo.callerVar[i] = arg;
+                }
+                
+                else {
+                    newInfo.callerVar[i] = "";
+                }
+                new_frame.argv[i].name = arg;
+              
+                if (index != -1){
+                
+                    new_frame.argv[i].value =current_frame.locals[index].value;
+                }
+
+                else{
+                
+                    new_frame.argv[i].value = stoi(arg);
+                }
+            }
+
+            callStack.push(new_frame);
+            callinfo.push(newInfo);
+            fseek(file, offset, SEEK_SET);
+        }
+
+        else if (tokens[0].text == "func") {
+
+            if (token_ct - 2 != current_frame.argc) {
+                break;
+            }
+
+            for (int i = 0; i < current_frame.argc; i++) {
+                current_frame.locals[i].name = tokens[i + 2].text;
+                current_frame.locals[i].value = current_frame.argv[i].value;
+            }
+
+            current_frame.localCount = current_frame.argc;
+        }
+
+        else if (tokens[0].text == "func_end") {
+         
+            if (callStack.depth() == 1) {
+                endProgram = true;
+            }
+
+            else {
+                Frame finishedFrame = callStack.pop();
+                argsUpdate finishedInfo = callinfo.pop();
+                Frame& callerFrame = callStack.peek();
+
+                for (int i = 0; i < finishedFrame.argc; i++) {
+                    string name = finishedInfo.callerVar[i];
+
+                    if (name != "") {
+                        int index = findVariable(callerFrame, name);
+
+                        if (index != -1) {
+                            callerFrame.locals[index].value =finishedFrame.locals[i].value;
+                        }
+                    }
+                }
+
+                int64_t returnPosition = finishedFrame.returnLine;
                 fseek(file, returnPosition, SEEK_SET);
             }
         }
 
+        else {
+
+            cout << "Error, unknown instruction" << endl;
+            break;
+        }
 
         Snapshot* snapshot = buildSnapshot(callStack);
         timeline.record(snapshot);
-        
-        if (endProgram){
+     
+        if (endProgram) {
             break;
         }
 
@@ -611,6 +727,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
     fclose(file);
 
 }
+
 
 // PASS 0x3: SERIALIZE TIMELINE
 void writeTdbg(Timeline& timeline, const char* tdbgPath){
@@ -632,6 +749,9 @@ int32_t main()
     }
 
     int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+    if (mainOffset == -1) {
+        return 1;
+    }
 
     Timeline timeline;
     executeProgram("resolve.bin", mainOffset, timeline);

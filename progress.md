@@ -33,4 +33,12 @@ Time Traveller Debugger Project
 
 
 9-10-26
+
+
 -Today I did major work for execution. I also went through my entire code and corrected typo errors. Rest of the execution phase  I will implement tomorrow and understand/start my serialization phase. 
+
+
+10-10-26 &  11-10-26
+
+
+-I completed my execution phase completely. Also,I spent  a lot of time testing the code(I got source.bin generated, tried different test cases). Then  I made changes to the code and fixed a few things to make sure the execution was working correctly. Now, im gonna move on to serialization.

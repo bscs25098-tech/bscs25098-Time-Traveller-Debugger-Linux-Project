@@ -1,0 +1,11 @@
+func main
+set a 10
+call first a
+func_end
+func first x
+add x 5
+call second x
+func_end
+func second y
+add y 10
+func_end
