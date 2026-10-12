@@ -42,3 +42,9 @@ Time Traveller Debugger Project
 
 
 -I completed my execution phase completely. Also,I spent  a lot of time testing the code(I got source.bin generated, tried different test cases). Then  I made changes to the code and fixed a few things to make sure the execution was working correctly. Now, im gonna move on to serialization.
+
+
+12-10-26
+
+
+-Implemented serialization. Tested my entire project on ubuntu terminal with different test cases.
