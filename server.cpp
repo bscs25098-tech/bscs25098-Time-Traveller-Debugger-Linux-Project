@@ -16,6 +16,13 @@
 #include <sys/socket.h>
 #include <cstdint>
 #include <cstdio>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <cstring>
+#include <cerrno>
+#include <sys/time.h>
+#include "helper.h"
 using namespace std;
 
 // ---- Constants ----
@@ -201,19 +208,6 @@ void writeHeader(FILE* f, const TTDBHeader& h){
 
  
 }
-
-// resolve.bin - bookkeeping
-struct FuncEntry{
-
-    string funcName;
-    int64_t byteOffsetInResolveBin; // where this function's FUNC header record sits
-};
-
-struct PendingPatch{
-    int64_t byteOffsetOfOffsetField; // where in resolve.bin to seek back and overwrite
-    string targetFuncName;
-};
-
 
 
 // PASS 0x0: READING source.bin + VALIDITY CHECK
@@ -803,26 +797,301 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath){
 }
 
 
+int createServerSocket(int port){
+
+    int serverSock = socket(AF_INET, SOCK_STREAM, 0);
+
+
+    if (serverSock < 0) {
+        perror("err, socket creation failed");
+        return -1;
+    }
+
+    int opt = 1;
+    setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
+
+
+    if (bind(serverSock, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("err, Bind failed");
+        close(serverSock);
+        return -1;
+    }
+
+    if (listen(serverSock, 16) < 0) {
+        perror("err, Listen failed");
+        close(serverSock);
+        return -1;
+    }
+
+    return serverSock;
+}
+
+int acceptClient(int serverSock){
+    sockaddr_in clientAddr{};
+    socklen_t clientLen = sizeof(clientAddr);
+
+    int clientSock = accept(serverSock,(sockaddr*)&clientAddr,&clientLen);
+
+    if (clientSock < 0) {
+
+        perror("err, accept failed");
+        return -1;
+    }
+
+    cout << "Load Balancer connected" << endl;
+
+    return clientSock;
+}
+
+
+bool sendAll(int sock, const char* data, size_t length){
+    size_t sent = 0;
+
+    while (sent < length) {
+        ssize_t n = send(sock, data + sent, length - sent, 0);
+
+        if (n <= 0) {
+            if (n < 0 && errno == EINTR) {
+                continue;
+            }
+
+            return false;
+        }
+
+        sent += n;
+    }
+
+    return true;
+}
+
+uint32_t calculateChecksum(uint32_t crc, const char* data, size_t length){
+
+    for (size_t i = 0; i < length; i++) {
+        crc ^= (unsigned char)data[i];
+
+        for (int j = 0; j < 8; j++) {
+          
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            }
+
+            else {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
+
+bool receiveUpload(int clientSock, const char* filePath, int& status){
+
+    TrailerChecker checker;
+    char buffer[IO_BUFFER_SIZE];
+
+    FILE* file = fopen(filePath, "wb");
+
+    if (file == nullptr) {
+        perror("err,cannot create source file");
+        return false;
+    }
+
+    status = -1;
+    bool gotStatus = false;
+    bool writeOK = true;
+
+    while (true) {
+        ssize_t n = recv(clientSock, buffer, sizeof(buffer), 0);
+
+        if (n == 0) {
+            break;
+        }
+
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            perror("err, Receive failed");
+            writeOK = false;
+            break;
+        }
+
+        string safeData = checker.addData(buffer, n);
+
+        for (size_t i = 0; i < safeData.size(); i++) {
+
+            if (!gotStatus) {
+                status = (unsigned char)safeData[i];
+                gotStatus = true;
+            }
+
+            else {
+
+                if (fwrite(&safeData[i], 1, 1, file) != 1) {
+                    writeOK = false;
+                    break;
+                }
+            }
+        }
+
+        if (!writeOK) {
+            break;
+        }
+    }
+
+    fclose(file);
+
+    if (!writeOK || !gotStatus || !checker.verify()) {
+        return false;
+    }
+
+    return status == 0;
+}
+
+
+bool sendTdbgResponse(int clientSock, const char* filePath){
+    FILE* file = fopen(filePath, "rb");
+
+    if (file == nullptr) {
+        perror("err, Cannot open TDBG file");
+        return false;
+    }
+
+    unsigned char status = 0;
+    uint32_t crc = 0xFFFFFFFF;
+
+
+    if (!sendAll(clientSock, (char*)&status, 1)) {
+        fclose(file);
+        return false;
+    }
+
+    crc = calculateChecksum(crc, (char*)&status, 1);
+    char buffer[IO_BUFFER_SIZE];
+
+    while (true) {
+        size_t n = fread(buffer, 1, sizeof(buffer), file);
+
+        if (n > 0) {
+
+            if (!sendAll(clientSock, buffer, n)) {
+                fclose(file);
+                return false;
+            }
+
+            crc = calculateChecksum(crc, buffer, n);
+        }
+
+        if (n < sizeof(buffer)) {
+            if (ferror(file)) {
+                fclose(file);
+                return false;
+            }
+
+            break;
+        }
+    }
+
+    fclose(file);
+
+    crc ^= 0xFFFFFFFF;
+
+    unsigned char trailer[4] = {
+        (unsigned char)(crc),
+        (unsigned char)(crc >> 8),
+        (unsigned char)(crc >> 16),
+        (unsigned char)(crc >> 24)
+    };
+
+
+    return sendAll(clientSock, (char*)trailer, 4);
+}
+
+bool sendErrorResponse(int clientSock){
+    unsigned char status = 1;
+    uint32_t crc = 0xFFFFFFFF;
+
+    crc = calculateChecksum(crc, (char*)&status, 1);
+    crc ^= 0xFFFFFFFF;
+
+    unsigned char trailer[4] = {
+        (unsigned char)crc,
+        (unsigned char)(crc >> 8),
+        (unsigned char)(crc >> 16),
+        (unsigned char)(crc >> 24)
+    };
+
+    if (!sendAll(clientSock, (char*)&status, 1)) {
+        return false;
+    }
+
+    return sendAll(clientSock, (char*)trailer, 4);
+}
+
+
 // main section
-int32_t main()
-{
+int main(int argc, char* argv[]){
+    int port = 5001;
 
-    if (!validateProgram("source.bin"))
-    {
-        // send an error response instead of a .tdbg file
+    if (argc >= 2) {
+        port = stoi(argv[1]);
+    }
+
+    int serverSock = createServerSocket(port);
+
+    if (serverSock < 0) {
         return 1;
     }
 
-    int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
-    if (mainOffset == -1) {
+    cout << "Server listening on port " << port << endl;
+    int clientSock = acceptClient(serverSock);
+
+    if (clientSock < 0) {
+        close(serverSock);
         return 1;
     }
 
-    Timeline timeline;
-    executeProgram("resolve.bin", mainOffset, timeline);
 
-    writeTdbg(timeline, "session.tdbg");
-  
+    int status = -1;
+
+
+    if (receiveUpload(clientSock, "source.bin", status)) {
+
+        if (validateProgram("source.bin")) {
+
+            int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+
+            if (mainOffset != -1) {
+                Timeline timeline;
+                executeProgram("resolve.bin", mainOffset, timeline);
+                writeTdbg(timeline, "session.tdbg");
+                sendTdbgResponse(clientSock, "session.tdbg");
+            }
+
+            else {
+                sendErrorResponse(clientSock);
+            }
+        }
+
+        else {
+            sendErrorResponse(clientSock);
+        }
+    }
+
+    else {
+        sendErrorResponse(clientSock);
+    }
+
+    shutdown(clientSock, SHUT_WR);
+    close(clientSock);
+    close(serverSock);
 
     return 0;
 }
+

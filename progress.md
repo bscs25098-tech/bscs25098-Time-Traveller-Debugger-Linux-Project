@@ -48,3 +48,10 @@ Time Traveller Debugger Project
 
 
 -Implemented serialization. Tested my entire project on ubuntu terminal with different test cases.
+
+
+10-11-26
+
+
+-So i started by going through the overall phase 2 to understand how the main flow works, how clients communicate with the server.
+Then I did research on socket programming (so hard), how data goes and comes. I implemented socket creation functions in the server.cpp and also worked on helper.h to create a class for  trailer checker to handle data
