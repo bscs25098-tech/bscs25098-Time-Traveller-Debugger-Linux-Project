@@ -55,3 +55,8 @@ Time Traveller Debugger Project
 
 -So i started by going through the overall phase 2 to understand how the main flow works, how clients communicate with the server.
 Then I did research on socket programming (so hard), how data goes and comes. I implemented socket creation functions in the server.cpp and also worked on helper.h to create a class for  trailer checker to handle data
+
+
+
+11-11-26
+-Implemented load balancer today. Also this phase is so difficult, so much built in stuff is being used that we know nothing about!!
