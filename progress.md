@@ -59,4 +59,14 @@ Then I did research on socket programming (so hard), how data goes and comes. I 
 
 
 11-11-26
+
+
 -Implemented load balancer today. Also this phase is so difficult, so much built in stuff is being used that we know nothing about!!
+
+
+
+12-11-26 & 13-11-26
+
+
+- I started working on client. cpp. Understood the client side communication with load balancer.
+
